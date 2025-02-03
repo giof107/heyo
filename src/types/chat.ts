@@ -30,3 +30,9 @@ export interface ChannelInfo {
     id: number;
   };
 }
+
+export type ChatTab = 'all' | 'modstreamer' | 'flagged';
+
+export interface ThemeState {
+  isDark: boolean;
+}

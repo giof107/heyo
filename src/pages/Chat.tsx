@@ -1,24 +1,34 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Pusher from 'pusher-js';
-import { ArrowLeft } from 'lucide-react';
+import { Moon, Sun, ArrowLeft, ArrowDown } from 'lucide-react';
 import ChatMessage from '../components/ChatMessage';
 import Settings from '../components/Settings';
-import { ChatMessage as ChatMessageType } from '../types/chat';
+import { ChatMessage as ChatMessageType, ChatTab } from '../types/chat';
+import { getInitialTheme, setTheme } from '../utils/theme';
+
+const MAX_MESSAGES = 200;
 
 const Chat: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
-  const [filters, setFilters] = useState({
-    showModOnly: false,
-    showStreamerOnly: false,
-  });
-  const [bannedWords, setBannedWords] = useState<string[]>([]);
+  const [modMessages, setModMessages] = useState<ChatMessageType[]>([]);
   const [flaggedMessages, setFlaggedMessages] = useState<ChatMessageType[]>([]);
+  const [activeTab, setActiveTab] = useState<ChatTab>('all');
+  const [isDark, setIsDark] = useState(getInitialTheme());
+  const [isModMode, setIsModMode] = useState(false);
+  const [bannedWords, setBannedWords] = useState<string[]>([]);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const pusherRef = useRef<Pusher | null>(null);
   const { channelId, chatroomId, username } = location.state || {};
+
+  useEffect(() => {
+    setTheme(isDark);
+  }, [isDark]);
 
   useEffect(() => {
     if (!channelId || !chatroomId) {
@@ -54,8 +64,12 @@ const Chat: React.FC = () => {
       });
     });
 
-    const messageHandler = (message: any) => {
+    const messageHandler = (message: ChatMessageType) => {
       try {
+        const isModOrStreamer = message.sender.identity.badges.some(
+          badge => badge.type === 'moderator' || badge.type === 'streamer'
+        );
+
         const containsBannedWord = bannedWords.some(word => 
           message.content.toLowerCase().includes(word.toLowerCase())
         );
@@ -63,7 +77,12 @@ const Chat: React.FC = () => {
         if (containsBannedWord) {
           setFlaggedMessages(prev => [...prev, message]);
         } else {
-          setMessages(prev => [...prev, message]);
+          if (!isPaused) {
+            setMessages(prev => [...prev.slice(-MAX_MESSAGES + 1), message]);
+            if (isModOrStreamer) {
+              setModMessages(prev => [...prev.slice(-MAX_MESSAGES + 1), message]);
+            }
+          }
         }
       } catch (error) {
         console.error('Error parsing message:', error);
@@ -71,10 +90,6 @@ const Chat: React.FC = () => {
     };
 
     pusher.bind('App\\Events\\ChatMessageEvent', messageHandler);
-
-    pusher.connection.bind('error', (err: any) => {
-      console.error('Pusher connection error:', err);
-    });
 
     return () => {
       pusher.unbind('App\\Events\\ChatMessageEvent', messageHandler);
@@ -84,9 +99,8 @@ const Chat: React.FC = () => {
         });
       }
     };
-  }, [channelId, chatroomId, navigate, bannedWords]);
+  }, [channelId, chatroomId, navigate, bannedWords, isPaused]);
 
-  // Component unmount cleanup
   useEffect(() => {
     return () => {
       if (pusherRef.current) {
@@ -97,57 +111,142 @@ const Chat: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const chatContainer = chatContainerRef.current;
+    if (!chatContainer) return;
 
-  const filteredMessages = messages.filter(message => {
-    if (filters.showModOnly) {
-      return message.sender.identity.badges.some(badge => badge.type === 'moderator');
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+      const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 100;
+      
+      if (!isAutoScrolling) {
+        setIsPaused(!isAtBottom);
+      }
+      setIsAutoScrolling(false);
+    };
+
+    chatContainer.addEventListener('scroll', handleScroll);
+    return () => chatContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!isPaused) {
+      setIsAutoScrolling(true);
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-    if (filters.showStreamerOnly) {
-      return message.sender.identity.badges.some(badge => badge.type === 'streamer');
+  }, [messages, activeTab, isPaused]);
+
+  const getDisplayMessages = () => {
+    switch (activeTab) {
+      case 'modstreamer':
+        return modMessages;
+      case 'flagged':
+        return isModMode ? flaggedMessages : [];
+      default:
+        return messages;
     }
-    return true;
-  });
+  };
+
+  const scrollToBottom = () => {
+    setIsPaused(false);
+    setIsAutoScrolling(true);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      <div className="bg-white shadow-sm p-4 flex items-center justify-between">
+    <div className={`h-screen flex flex-col ${isDark ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+      <div className="bg-white dark:bg-gray-800 shadow-sm p-4 flex items-center justify-between border-b dark:border-gray-700">
         <div className="flex items-center">
           <button
             onClick={() => navigate('/')}
-            className="mr-4 hover:bg-gray-100 p-2 rounded-full"
+            className="mr-4 hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded-full"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5 dark:text-white" />
           </button>
-          <h1 className="text-xl font-semibold">{username}'s Chat</h1>
+          <h1 className="text-xl font-semibold dark:text-white">{username}'s Chat</h1>
         </div>
-        <Settings
-          filters={filters}
-          onFilterChange={setFilters}
-          bannedWords={bannedWords}
-          onBannedWordsChange={setBannedWords}
-        />
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setIsDark(!isDark)}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            {isDark ? (
+              <Sun className="w-5 h-5 text-white" />
+            ) : (
+              <Moon className="w-5 h-5" />
+            )}
+          </button>
+          <Settings
+            isModMode={isModMode}
+            onModModeChange={setIsModMode}
+            bannedWords={bannedWords}
+            onBannedWordsChange={setBannedWords}
+            isDark={isDark}
+          />
+        </div>
       </div>
 
-      <div className="flex-1 overflow-hidden flex">
-        <div className="flex-1 overflow-y-auto p-4">
-          {filteredMessages.map((message) => (
-            <ChatMessage key={message.id} message={message} />
+      <div className="border-b dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="flex">
+          <button
+            className={`px-4 py-2 ${
+              activeTab === 'all'
+                ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+            onClick={() => setActiveTab('all')}
+          >
+            All Messages
+          </button>
+          <button
+            className={`px-4 py-2 ${
+              activeTab === 'modstreamer'
+                ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+            onClick={() => setActiveTab('modstreamer')}
+          >
+            Mod/Streamer
+          </button>
+          {isModMode && (
+            <button
+              className={`px-4 py-2 ${
+                activeTab === 'flagged'
+                  ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+              onClick={() => setActiveTab('flagged')}
+            >
+              Flagged Messages
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div 
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto bg-white dark:bg-gray-800 relative"
+      >
+        <div className="p-4">
+          {getDisplayMessages().map((message) => (
+            <ChatMessage 
+              key={message.id} 
+              message={message} 
+              bannedWords={bannedWords}
+              highlightColor={isDark ? '#4B5563' : '#E5E7EB'}
+            />
           ))}
           <div ref={messagesEndRef} />
         </div>
-
-        {flaggedMessages.length > 0 && (
-          <div className="w-64 bg-red-50 border-l border-red-200 overflow-y-auto">
-            <div className="p-4 bg-red-100 border-b border-red-200">
-              <h3 className="font-semibold text-red-700">Flagged Messages</h3>
-            </div>
-            <div className="p-2">
-              {flaggedMessages.map((message) => (
-                <ChatMessage key={message.id} message={message} />
-              ))}
-            </div>
+        
+        {isPaused && (
+          <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2">
+            <button
+              onClick={scrollToBottom}
+              className="bg-black/75 dark:bg-white/10 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-lg hover:bg-black/85 dark:hover:bg-white/20 transition-colors flex items-center gap-2"
+            >
+              <span>Kaydırırken sohbet duraklatıldı</span>
+              <ArrowDown className="w-5 h-5" />
+            </button>
           </div>
         )}
       </div>

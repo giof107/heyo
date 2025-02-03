@@ -1,3 +1,5 @@
+import { ChannelInfo } from './channel';
+
 export interface ChatMessage {
   id: string;
   chatroom_id: number;
@@ -22,17 +24,17 @@ export interface Badge {
   type: 'streamer' | 'founder' | 'moderator' | 'subscriber' | 'og' | 'vip';
   text: string;
   count?: number;
+  image?: string;
 }
 
-export interface ChannelInfo {
+export interface SubscriberBadge {
   id: number;
-  chatroom: {
-    id: number;
+  channel_id: number;
+  months: number;
+  badge_image: {
+    srcset: string;
+    src: string;
   };
 }
 
-export type ChatTab = 'all' | 'modstreamer' | 'flagged';
-
-export interface ThemeState {
-  isDark: boolean;
-}
+export type ChatTab = 'all' | 'modstreamer' | 'flagged' | 'tracked';

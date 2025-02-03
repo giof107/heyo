@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Twitch } from 'lucide-react';
+import { SubscriberBadge } from '../types/chat';
 
 const Home: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -16,8 +17,21 @@ const Home: React.FC = () => {
 
     try {
       const response = await axios.get(`https://kick.com/api/v1/channels/${username}`);
-      const { id, chatroom } = response.data;
-      navigate('/chat', { state: { channelId: id, chatroomId: chatroom.id, username } });
+      const { id, chatroom, subscriber_badges } = response.data;
+      
+      // Store subscriber badges in localStorage for use in chat
+      if (subscriber_badges) {
+        localStorage.setItem(`subscriber_badges_${id}`, JSON.stringify(subscriber_badges));
+      }
+
+      navigate('/chat', { 
+        state: { 
+          channelId: id, 
+          chatroomId: chatroom.id, 
+          username,
+          subscriberBadges: subscriber_badges
+        } 
+      });
     } catch (err) {
       setError('Channel not found or an error occurred');
     } finally {

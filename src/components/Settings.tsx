@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, X } from 'lucide-react';
+import { Settings as SettingsIcon, X, User, Shield } from 'lucide-react';
 
 interface SettingsProps {
   isModMode: boolean;
@@ -7,6 +7,9 @@ interface SettingsProps {
   bannedWords: string[];
   onBannedWordsChange: (words: string[]) => void;
   isDark: boolean;
+  trackedUsers: string[];
+  onTrackedUsersChange: (users: string[]) => void;
+  onTimeoutUser?: (username: string, duration: number) => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({
@@ -15,9 +18,15 @@ const Settings: React.FC<SettingsProps> = ({
   bannedWords,
   onBannedWordsChange,
   isDark,
+  trackedUsers,
+  onTrackedUsersChange,
+  onTimeoutUser,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [bannedWordsInput, setBannedWordsInput] = useState('');
+  const [trackedUserInput, setTrackedUserInput] = useState('');
+  const [timeoutUsername, setTimeoutUsername] = useState('');
+  const [timeoutDuration, setTimeoutDuration] = useState(300); // 5 minutes default
 
   const handleBannedWordsSubmit = () => {
     if (bannedWordsInput.trim()) {
@@ -33,8 +42,26 @@ const Settings: React.FC<SettingsProps> = ({
     }
   };
 
+  const handleTrackedUserSubmit = () => {
+    if (trackedUserInput.trim() && !trackedUsers.includes(trackedUserInput.trim())) {
+      onTrackedUsersChange([...trackedUsers, trackedUserInput.trim()]);
+      setTrackedUserInput('');
+    }
+  };
+
+  const handleTimeoutSubmit = () => {
+    if (timeoutUsername.trim() && onTimeoutUser) {
+      onTimeoutUser(timeoutUsername.trim(), timeoutDuration);
+      setTimeoutUsername('');
+    }
+  };
+
   const removeBannedWord = (word: string) => {
     onBannedWordsChange(bannedWords.filter(w => w !== word));
+  };
+
+  const removeTrackedUser = (username: string) => {
+    onTrackedUsersChange(trackedUsers.filter(u => u !== username));
   };
 
   return (
@@ -52,7 +79,7 @@ const Settings: React.FC<SettingsProps> = ({
             className="fixed inset-0 bg-black/20 dark:bg-black/50 backdrop-blur-sm z-40"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 z-50">
+          <div className="absolute right-0 mt-2 w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 z-50">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold dark:text-white">Settings</h3>
               <button
@@ -63,7 +90,7 @@ const Settings: React.FC<SettingsProps> = ({
               </button>
             </div>
             
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 dark:text-white">
                   <input
@@ -77,18 +104,59 @@ const Settings: React.FC<SettingsProps> = ({
               </div>
 
               <div className="border-t dark:border-gray-700 pt-4">
-                <h4 className="font-semibold mb-2 dark:text-white">Banned Words</h4>
+                <div className="flex items-center gap-2 mb-2">
+                  <User className="w-4 h-4 dark:text-white" />
+                  <h4 className="font-semibold dark:text-white">Track Users</h4>
+                </div>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={trackedUserInput}
+                    onChange={(e) => setTrackedUserInput(e.target.value)}
+                    className="flex-1 px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:text-white"
+                    placeholder="Enter username to track"
+                  />
+                  <button
+                    onClick={handleTrackedUserSubmit}
+                    className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700"
+                  >
+                    Track
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto mb-4">
+                  {trackedUsers.map((username) => (
+                    <span
+                      key={username}
+                      className="inline-flex items-center px-2 py-1 rounded-full text-sm bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200"
+                    >
+                      {username}
+                      <button
+                        onClick={() => removeTrackedUser(username)}
+                        className="ml-1 p-0.5 hover:bg-purple-200 dark:hover:bg-purple-800 rounded-full"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t dark:border-gray-700 pt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="w-4 h-4 dark:text-white" />
+                  <h4 className="font-semibold dark:text-white">Banned Words</h4>
+                </div>
                 <div className="flex gap-2 mb-2">
                   <input
                     type="text"
                     value={bannedWordsInput}
                     onChange={(e) => setBannedWordsInput(e.target.value)}
-                    className="flex-1 px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400"
+                    className="flex-1 px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:text-white"
                     placeholder="Add words (comma-separated)"
                   />
                   <button
                     onClick={handleBannedWordsSubmit}
-                    className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                    className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700"
                   >
                     Add
                   </button>
@@ -110,6 +178,41 @@ const Settings: React.FC<SettingsProps> = ({
                   ))}
                 </div>
               </div>
+
+              {isModMode && (
+                <div className="border-t dark:border-gray-700 pt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="w-4 h-4 dark:text-white" />
+                    <h4 className="font-semibold dark:text-white">Timeout User</h4>
+                  </div>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={timeoutUsername}
+                      onChange={(e) => setTimeoutUsername(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:text-white"
+                      placeholder="Username"
+                    />
+                    <select
+                      value={timeoutDuration}
+                      onChange={(e) => setTimeoutDuration(Number(e.target.value))}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:text-white"
+                    >
+                      <option value={60}>1 minute</option>
+                      <option value={300}>5 minutes</option>
+                      <option value={600}>10 minutes</option>
+                      <option value={3600}>1 hour</option>
+                      <option value={86400}>24 hours</option>
+                    </select>
+                    <button
+                      onClick={handleTimeoutSubmit}
+                      className="w-full px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700"
+                    >
+                      Timeout User
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>
@@ -118,4 +221,4 @@ const Settings: React.FC<SettingsProps> = ({
   );
 };
 
-export default Settings
+export default Settings;
